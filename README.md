@@ -2,8 +2,13 @@
 - [2. RDrop策略](#2-rdrop策略)
 - [3. 最后四层拼接](#3-最后四层拼接)
 - [4. 模型层之间的差分学习率](#4-模型层之间的差分学习率)
-
-
+- [5. xlnet分类处理长文本](#5-xlnet分类处理长文本)
+- [6. EMA指数权重平均](#6-ema指数权重平均)
+- [7. DiceLoss](#7-diceloss)
+- [8. FocalLoss](#8-focalloss)
+- [9. FGM对抗训练](#9-fgm对抗训练)
+- [10. 生成模型中的各种解码方式](#10-生成模型中的各种解码方式)
+- [11. mseloss中引入相关性损失](#11-mseloss中引入相关性损失)
 
 
 # 1. BERT最后一层mean-pooling
@@ -466,4 +471,41 @@ if __name__ == '__main__':
     # greedy_decode()   # 手写greedy search
     # beam_search_decode()   # 贪婪搜索和beam_search对比
     temperature_sampling_decode()
+```
+# 11. mseloss中引入相关性损失
+```python
+from torch import nn
+import torch
+
+
+class MSECorrLoss(nn.Module):
+    def __init__(self, p=1.5):
+        super(MSECorrLoss, self).__init__()
+        self.p = p
+        self.mseLoss = nn.MSELoss()
+
+    def forward(self, logits, target):
+        assert (logits.size() == target.size())
+        mse_loss = self.mseLoss(logits, target)   # 均方误差损失
+
+        logits_mean = logits.mean(dim=0)
+        logits_std = logits.std(dim=0)
+        logits_z = (logits - logits_mean) / logits_std   # 正态分布标准化
+
+        target_mean = target.mean(dim=0)
+        target_std = target.std(dim=0)
+        target_z = (target - target_mean) / target_std   # 正态分布标准化
+        corr_loss = 1 - ((logits_z * target_z).mean(dim=0))   # 后面的减数 就是计算两个分布的相关系数，然后用1减。越相关损失越小。
+        loss = mse_loss + self.p * corr_loss
+        return loss
+
+
+if __name__ == '__main__':
+    logits = torch.tensor([[0.1], [0.2], [0.2], [0.8], [0.4]], dtype=torch.float32)
+    label = torch.tensor([[0], [1], [0], [0], [1]], dtype=torch.float32)
+    print(logits.size())   # torch.Size([5, 1])   (batch_size, 1)
+    print(label.size())  # torch.Size([5, 1])   (batch_size, 1)
+    loss_func = MSECorrLoss()
+    loss = loss_func(logits, label)
+    print(loss)   # tensor([1.9949])
 ```
