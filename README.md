@@ -508,4 +508,5 @@ if __name__ == '__main__':
     loss_func = MSECorrLoss()
     loss = loss_func(logits, label)
     print(loss)   # tensor([1.9949])
+
 ```
